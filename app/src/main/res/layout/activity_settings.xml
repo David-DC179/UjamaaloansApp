@@ -34,4 +34,34 @@
         android:text="Enable Bluetooth"
         android:layout_marginTop="10dp"/>
 
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Data Sync"
+        android:textSize="18sp"
+        android:layout_marginTop="30dp"/>
+
+    <TextView
+        android:id="@+id/syncStatus"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Checking connection..."
+        android:layout_marginTop="10dp"/>
+
+    <TextView
+        android:id="@+id/lastSyncText"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Never synced"
+        android:textColor="@color/colorTextSecondary"
+        android:textSize="13sp"
+        android:layout_marginTop="4dp"/>
+
+    <Button
+        android:id="@+id/syncNowBtn"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Sync Now"
+        android:layout_marginTop="10dp"/>
+
 </LinearLayout>

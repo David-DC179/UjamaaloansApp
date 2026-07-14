@@ -14,6 +14,10 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Locale;
+
 public class SettingsActivity extends AppCompatActivity {
 
     private static final int BLUETOOTH_PERMISSION_REQUEST_CODE = 201;
@@ -22,7 +26,14 @@ public class SettingsActivity extends AppCompatActivity {
     TextView bluetoothStatus;
     Button toggleBluetoothBtn;
 
+    TextView syncStatus;
+    TextView lastSyncText;
+    Button syncNowBtn;
+
     BluetoothAdapter bluetoothAdapter;
+
+    SessionManager sessionManager;
+    FirestoreSyncManager firestoreSyncManager;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -34,11 +45,20 @@ public class SettingsActivity extends AppCompatActivity {
         bluetoothStatus = findViewById(R.id.bluetoothStatus);
         toggleBluetoothBtn = findViewById(R.id.toggleBluetoothBtn);
 
+        syncStatus = findViewById(R.id.syncStatus);
+        lastSyncText = findViewById(R.id.lastSyncText);
+        syncNowBtn = findViewById(R.id.syncNowBtn);
+
         bluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
 
+        sessionManager = new SessionManager(this);
+        firestoreSyncManager = new FirestoreSyncManager(this);
+
         toggleBluetoothBtn.setOnClickListener(v -> enableBluetooth());
+        syncNowBtn.setOnClickListener(v -> syncNow());
 
         refreshBluetoothStatus();
+        refreshSyncStatus();
 
     }
 
@@ -50,6 +70,80 @@ public class SettingsActivity extends AppCompatActivity {
         super.onResume();
 
         refreshBluetoothStatus();
+        refreshSyncStatus();
+
+    }
+
+
+
+    private void refreshSyncStatus() {
+
+        if (NetworkUtils.isConnected(this)) {
+            syncStatus.setText("Online - ready to sync");
+        } else {
+            syncStatus.setText("Offline - changes are saved on this device and will sync when you're back online");
+        }
+
+        long lastSync = sessionManager.getLastSyncTime();
+
+        if (lastSync == 0) {
+
+            lastSyncText.setText("Never synced");
+
+        } else {
+
+            SimpleDateFormat format = new SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault());
+            lastSyncText.setText("Last synced " + format.format(new Date(lastSync)));
+
+        }
+
+    }
+
+
+
+    private void syncNow() {
+
+        syncNowBtn.setEnabled(false);
+        syncStatus.setText("Syncing...");
+
+        firestoreSyncManager.syncNow(sessionManager.getEmail(), new FirestoreSyncManager.SyncCallback() {
+
+            @Override
+            public void onSyncSuccess(int loansPushed, int feedbackPushed, int loansPulled, int feedbackPulled) {
+
+                runOnUiThread(() -> {
+
+                    sessionManager.setLastSyncTime(System.currentTimeMillis());
+
+                    syncStatus.setText("Sync complete");
+                    Toast.makeText(
+                            SettingsActivity.this,
+                            "Synced: " + loansPushed + " loan(s) and " + feedbackPushed +
+                                    " feedback item(s) uploaded, " + loansPulled + " loan(s) and " +
+                                    feedbackPulled + " feedback item(s) downloaded",
+                            Toast.LENGTH_LONG
+                    ).show();
+
+                    syncNowBtn.setEnabled(true);
+                    refreshSyncStatus();
+
+                });
+
+            }
+
+            @Override
+            public void onSyncFailed(String reason) {
+
+                runOnUiThread(() -> {
+
+                    syncStatus.setText(reason);
+                    syncNowBtn.setEnabled(true);
+
+                });
+
+            }
+
+        });
 
     }
 
