@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "827010286302",
+    "project_id": "ujamaaloanapp",
+    "storage_bucket": "ujamaaloanapp.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:827010286302:android:673048c457689fc7f4f84f",
+        "android_client_info": {
+          "package_name": "com.example.ujamaloansapp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA89x8gSK7xThI9D7lQ-1Kq8dOXYtcdfmA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
