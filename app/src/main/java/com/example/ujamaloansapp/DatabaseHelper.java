@@ -12,7 +12,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
 
 
     private static final String DATABASE_NAME = "UjamaaLoans.db";
-    private static final int DATABASE_VERSION = 2;
+    private static final int DATABASE_VERSION = 3;
 
 
     private static final String TABLE_USERS = "users";
@@ -50,7 +50,9 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                 "purpose TEXT," +
                 "status TEXT," +
                 "applied_date TEXT," +
-                "due_date TEXT" +
+                "due_date TEXT," +
+                "firestore_id TEXT," +
+                "synced INTEGER DEFAULT 0" +
                 ")";
 
         String createFeedback = "CREATE TABLE " + TABLE_FEEDBACK +
@@ -60,7 +62,9 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                 "type TEXT," +
                 "message TEXT," +
                 "rating INTEGER," +
-                "date TEXT" +
+                "date TEXT," +
+                "firestore_id TEXT," +
+                "synced INTEGER DEFAULT 0" +
                 ")";
 
 
@@ -285,6 +289,83 @@ public class DatabaseHelper extends SQLiteOpenHelper {
 
 
 
+    // --- Firestore sync support (loans) ---
+
+    // Locally created loans not yet pushed to Firestore
+    public Cursor getUnsyncedLoans(String userEmail){
+
+        SQLiteDatabase db = this.getReadableDatabase();
+
+        return db.rawQuery(
+                "SELECT id, user_email, amount, term_months, purpose, status, applied_date, due_date " +
+                        "FROM loans WHERE user_email=? AND synced=0",
+                new String[]{userEmail}
+        );
+
+    }
+
+    public void markLoanSynced(long localId, String firestoreId){
+
+        SQLiteDatabase db = this.getWritableDatabase();
+
+        ContentValues values = new ContentValues();
+
+        values.put("synced", 1);
+        values.put("firestore_id", firestoreId);
+
+        db.update(TABLE_LOANS, values, "id=?", new String[]{String.valueOf(localId)});
+
+    }
+
+    public boolean loanExistsByFirestoreId(String firestoreId){
+
+        SQLiteDatabase db = this.getReadableDatabase();
+
+        Cursor cursor = db.rawQuery(
+                "SELECT id FROM loans WHERE firestore_id=?",
+                new String[]{firestoreId}
+        );
+
+        boolean exists = cursor.getCount() > 0;
+
+        cursor.close();
+
+        return exists;
+
+    }
+
+    // A loan that originated on another device, pulled down from Firestore
+    public long insertLoanFromRemote(
+            String firestoreId,
+            String userEmail,
+            double amount,
+            int termMonths,
+            String purpose,
+            String status,
+            String appliedDate,
+            String dueDate
+    ){
+
+        SQLiteDatabase db = this.getWritableDatabase();
+
+        ContentValues values = new ContentValues();
+
+        values.put("user_email", userEmail);
+        values.put("amount", amount);
+        values.put("term_months", termMonths);
+        values.put("purpose", purpose);
+        values.put("status", status);
+        values.put("applied_date", appliedDate);
+        values.put("due_date", dueDate);
+        values.put("firestore_id", firestoreId);
+        values.put("synced", 1);
+
+        return db.insert(TABLE_LOANS, null, values);
+
+    }
+
+
+
     // Feedback / Complaints (shared table, distinguished by type)
 
     public long insertFeedback(
@@ -304,6 +385,77 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         values.put("message", message);
         values.put("rating", rating);
         values.put("date", date);
+
+        return db.insert(TABLE_FEEDBACK, null, values);
+
+    }
+
+
+
+    // --- Firestore sync support (feedback) ---
+
+    public Cursor getUnsyncedFeedback(String userEmail){
+
+        SQLiteDatabase db = this.getReadableDatabase();
+
+        return db.rawQuery(
+                "SELECT id, user_email, type, message, rating, date " +
+                        "FROM feedback WHERE user_email=? AND synced=0",
+                new String[]{userEmail}
+        );
+
+    }
+
+    public void markFeedbackSynced(long localId, String firestoreId){
+
+        SQLiteDatabase db = this.getWritableDatabase();
+
+        ContentValues values = new ContentValues();
+
+        values.put("synced", 1);
+        values.put("firestore_id", firestoreId);
+
+        db.update(TABLE_FEEDBACK, values, "id=?", new String[]{String.valueOf(localId)});
+
+    }
+
+    public boolean feedbackExistsByFirestoreId(String firestoreId){
+
+        SQLiteDatabase db = this.getReadableDatabase();
+
+        Cursor cursor = db.rawQuery(
+                "SELECT id FROM feedback WHERE firestore_id=?",
+                new String[]{firestoreId}
+        );
+
+        boolean exists = cursor.getCount() > 0;
+
+        cursor.close();
+
+        return exists;
+
+    }
+
+    public long insertFeedbackFromRemote(
+            String firestoreId,
+            String userEmail,
+            String type,
+            String message,
+            int rating,
+            String date
+    ){
+
+        SQLiteDatabase db = this.getWritableDatabase();
+
+        ContentValues values = new ContentValues();
+
+        values.put("user_email", userEmail);
+        values.put("type", type);
+        values.put("message", message);
+        values.put("rating", rating);
+        values.put("date", date);
+        values.put("firestore_id", firestoreId);
+        values.put("synced", 1);
 
         return db.insert(TABLE_FEEDBACK, null, values);
 
