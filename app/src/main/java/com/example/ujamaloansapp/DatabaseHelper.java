@@ -7,6 +7,10 @@ import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
 
+import java.text.SimpleDateFormat;
+import java.util.Calendar;
+import java.util.Locale;
+
 
 public class DatabaseHelper extends SQLiteOpenHelper {
 
@@ -289,6 +293,88 @@ public class DatabaseHelper extends SQLiteOpenHelper {
 
 
 
+    // Most recently applied loans, newest first - powers the dashboard's "Recent Loans" list
+
+    public Cursor getRecentLoans(String userEmail, int limit){
+
+        SQLiteDatabase db = this.getReadableDatabase();
+
+        return db.rawQuery(
+                "SELECT amount, term_months, purpose, status, applied_date, due_date " +
+                        "FROM loans WHERE user_email=? ORDER BY id DESC LIMIT ?",
+                new String[]{userEmail, String.valueOf(limit)}
+        );
+
+    }
+
+
+
+    // Populates a new account with 20 varied sample loans so the dashboard has something to show
+
+    public void seedSampleLoans(String userEmail){
+
+        SQLiteDatabase db = this.getWritableDatabase();
+
+        String[] purposes = {
+                "Business", "Education", "Medical", "Agriculture",
+                "Emergency", "Home Improvement", "Vehicle", "Rent"
+        };
+
+        String[] statuses = {"Pending", "Approved", "Paid", "Rejected"};
+
+        SimpleDateFormat format = new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault());
+
+        for (int i = 0; i < 20; i++) {
+
+            double amount = 5000 + ((i * 3500) % 95000);
+            int termMonths = 3 + (i % 8) * 3;
+            String purpose = purposes[i % purposes.length];
+            String status = statuses[i % statuses.length];
+
+            Calendar applied = Calendar.getInstance();
+            applied.add(Calendar.DAY_OF_YEAR, -(i * 12));
+            String appliedDate = format.format(applied.getTime());
+
+            Calendar due = (Calendar) applied.clone();
+            due.add(Calendar.MONTH, termMonths);
+            due.add(Calendar.DAY_OF_YEAR, (i % 5 - 2) * 10);
+            String dueDate = format.format(due.getTime());
+
+            ContentValues values = new ContentValues();
+
+            values.put("user_email", userEmail);
+            values.put("amount", amount);
+            values.put("term_months", termMonths);
+            values.put("purpose", purpose);
+            values.put("status", status);
+            values.put("applied_date", appliedDate);
+            values.put("due_date", dueDate);
+
+            db.insert(TABLE_LOANS, null, values);
+
+        }
+
+    }
+
+
+
+    // The loan with the nearest upcoming due date - what the dashboard highlights as "pay next"
+
+    public Cursor getNextDueLoan(String userEmail){
+
+        SQLiteDatabase db = this.getReadableDatabase();
+
+        return db.rawQuery(
+                "SELECT amount, purpose, status, due_date " +
+                        "FROM loans WHERE user_email=? AND status != 'Paid' AND status != 'Rejected' " +
+                        "ORDER BY due_date ASC LIMIT 1",
+                new String[]{userEmail}
+        );
+
+    }
+
+
+
     // --- Firestore sync support (loans) ---
 
     // Locally created loans not yet pushed to Firestore
@@ -361,6 +447,51 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         values.put("synced", 1);
 
         return db.insert(TABLE_LOANS, null, values);
+
+    }
+
+
+
+    public static class LoanSummary {
+
+        public int totalLoans = 0;
+        public int pendingLoans = 0;
+        public double totalOutstanding = 0;
+
+    }
+
+
+
+    public LoanSummary getLoanSummary(String userEmail){
+
+        SQLiteDatabase db = this.getReadableDatabase();
+
+        LoanSummary summary = new LoanSummary();
+
+        Cursor cursor = db.rawQuery(
+                "SELECT status, amount FROM loans WHERE user_email=?",
+                new String[]{userEmail}
+        );
+
+        while (cursor.moveToNext()) {
+
+            summary.totalLoans++;
+
+            String status = cursor.getString(cursor.getColumnIndexOrThrow("status"));
+            double amount = cursor.getDouble(cursor.getColumnIndexOrThrow("amount"));
+
+            if (!"Paid".equals(status) && !"Rejected".equals(status)) {
+
+                summary.pendingLoans++;
+                summary.totalOutstanding += amount;
+
+            }
+
+        }
+
+        cursor.close();
+
+        return summary;
 
     }
 
