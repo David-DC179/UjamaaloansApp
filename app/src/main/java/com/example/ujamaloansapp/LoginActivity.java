@@ -2,6 +2,8 @@ package com.example.ujamaloansapp;
 
 
 import android.content.Intent;
+import android.database.Cursor;
+import android.database.sqlite.SQLiteException;
 import android.os.Bundle;
 import android.view.View;
 import android.widget.Button;
@@ -24,6 +26,8 @@ public class LoginActivity extends AppCompatActivity {
 
     DatabaseHelper databaseHelper;
 
+    SessionManager sessionManager;
+
 
 
     @Override
@@ -38,9 +42,12 @@ public class LoginActivity extends AppCompatActivity {
         // Connect Database
         databaseHelper = new DatabaseHelper(this);
 
+        sessionManager = new SessionManager(this);
 
 
-        // Temporary test user
+
+        // Temporary test user (safe to call every time: email is now UNIQUE,
+        // so repeat calls just fail the insert instead of duplicating rows)
         databaseHelper.insertTestUser();
 
 
@@ -140,19 +147,64 @@ public class LoginActivity extends AppCompatActivity {
 
 
         }
+        else if(!NetworkUtils.isConnected(this)) {
+
+
+
+            Toast.makeText(
+                    this,
+                    "No internet connection. Please connect and try again.",
+                    Toast.LENGTH_SHORT
+            ).show();
+
+
+
+        }
         else {
 
 
 
-            boolean checkLogin = databaseHelper.loginUser(
-                    user,
-                    pass
-            );
+            boolean checkLogin;
+
+            try {
+
+                checkLogin = databaseHelper.loginUser(
+                        user,
+                        pass
+                );
+
+            } catch (SQLiteException e) {
+
+                Toast.makeText(
+                        this,
+                        "Database unavailable. Please try again.",
+                        Toast.LENGTH_SHORT
+                ).show();
+
+                return;
+
+            }
 
 
 
 
             if(checkLogin) {
+
+
+
+                // Resolve the canonical email/name for the session
+                Cursor cursor = databaseHelper.getUserByIdentifier(user);
+
+                if (cursor.moveToFirst()) {
+
+                    String canonicalEmail = cursor.getString(cursor.getColumnIndexOrThrow("email"));
+                    String name = cursor.getString(cursor.getColumnIndexOrThrow("name"));
+
+                    sessionManager.saveSession(canonicalEmail, name);
+
+                }
+
+                cursor.close();
 
 
 
@@ -173,8 +225,6 @@ public class LoginActivity extends AppCompatActivity {
 
 
                 finish();
-                // Next lesson:
-                // Open DashboardActivity here
 
 
 

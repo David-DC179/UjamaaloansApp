@@ -12,10 +12,12 @@ public class DatabaseHelper extends SQLiteOpenHelper {
 
 
     private static final String DATABASE_NAME = "UjamaaLoans.db";
-    private static final int DATABASE_VERSION = 1;
+    private static final int DATABASE_VERSION = 2;
 
 
     private static final String TABLE_USERS = "users";
+    private static final String TABLE_LOANS = "loans";
+    private static final String TABLE_FEEDBACK = "feedback";
 
 
     public DatabaseHelper(Context context) {
@@ -30,17 +32,41 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     public void onCreate(SQLiteDatabase db) {
 
 
-        String createTable = "CREATE TABLE " + TABLE_USERS +
+        String createUsers = "CREATE TABLE " + TABLE_USERS +
                 "(" +
                 "id INTEGER PRIMARY KEY AUTOINCREMENT," +
                 "name TEXT," +
                 "phone TEXT," +
-                "email TEXT," +
+                "email TEXT UNIQUE," +
                 "password TEXT" +
                 ")";
 
+        String createLoans = "CREATE TABLE " + TABLE_LOANS +
+                "(" +
+                "id INTEGER PRIMARY KEY AUTOINCREMENT," +
+                "user_email TEXT," +
+                "amount REAL," +
+                "term_months INTEGER," +
+                "purpose TEXT," +
+                "status TEXT," +
+                "applied_date TEXT," +
+                "due_date TEXT" +
+                ")";
 
-        db.execSQL(createTable);
+        String createFeedback = "CREATE TABLE " + TABLE_FEEDBACK +
+                "(" +
+                "id INTEGER PRIMARY KEY AUTOINCREMENT," +
+                "user_email TEXT," +
+                "type TEXT," +
+                "message TEXT," +
+                "rating INTEGER," +
+                "date TEXT" +
+                ")";
+
+
+        db.execSQL(createUsers);
+        db.execSQL(createLoans);
+        db.execSQL(createFeedback);
 
     }
 
@@ -51,6 +77,8 @@ public class DatabaseHelper extends SQLiteOpenHelper {
 
 
         db.execSQL("DROP TABLE IF EXISTS " + TABLE_USERS);
+        db.execSQL("DROP TABLE IF EXISTS " + TABLE_LOANS);
+        db.execSQL("DROP TABLE IF EXISTS " + TABLE_FEEDBACK);
 
         onCreate(db);
 
@@ -92,10 +120,10 @@ public class DatabaseHelper extends SQLiteOpenHelper {
 
 
 
-    // Login Check
+    // Login Check (matches email OR phone)
 
     public boolean loginUser(
-            String email,
+            String identifier,
             String password
     ){
 
@@ -104,8 +132,8 @@ public class DatabaseHelper extends SQLiteOpenHelper {
 
 
         Cursor cursor = db.rawQuery(
-                "SELECT * FROM users WHERE email=? AND password=?",
-                new String[]{email,password}
+                "SELECT * FROM users WHERE (email=? OR phone=?) AND password=?",
+                new String[]{identifier,identifier,password}
         );
 
 
@@ -119,6 +147,45 @@ public class DatabaseHelper extends SQLiteOpenHelper {
 
 
     }
+
+
+
+    // Look up a user by email or phone (used to resolve session identity)
+
+    public Cursor getUserByIdentifier(String identifier){
+
+        SQLiteDatabase db = this.getReadableDatabase();
+
+        return db.rawQuery(
+                "SELECT * FROM users WHERE email=? OR phone=?",
+                new String[]{identifier, identifier}
+        );
+
+    }
+
+
+
+    public boolean updateUserProfile(String email, String name, String phone){
+
+        SQLiteDatabase db = this.getWritableDatabase();
+
+        ContentValues values = new ContentValues();
+
+        values.put("name", name);
+        values.put("phone", phone);
+
+        int result = db.update(
+                TABLE_USERS,
+                values,
+                "email=?",
+                new String[]{email}
+        );
+
+        return result > 0;
+
+    }
+
+
 
     public boolean insertTestUser(){
 
@@ -168,6 +235,77 @@ public class DatabaseHelper extends SQLiteOpenHelper {
 
         return result > 0;
 
+
+    }
+
+
+
+    // Loans
+
+    public long insertLoan(
+            String userEmail,
+            double amount,
+            int termMonths,
+            String purpose,
+            String appliedDate,
+            String dueDate
+    ){
+
+        SQLiteDatabase db = this.getWritableDatabase();
+
+        ContentValues values = new ContentValues();
+
+        values.put("user_email", userEmail);
+        values.put("amount", amount);
+        values.put("term_months", termMonths);
+        values.put("purpose", purpose);
+        values.put("status", "Pending");
+        values.put("applied_date", appliedDate);
+        values.put("due_date", dueDate);
+
+        return db.insert(TABLE_LOANS, null, values);
+
+    }
+
+
+
+    // _id alias is required by SimpleCursorAdapter/CursorAdapter
+
+    public Cursor getLoansCursor(String userEmail){
+
+        SQLiteDatabase db = this.getReadableDatabase();
+
+        return db.rawQuery(
+                "SELECT id AS _id, amount, term_months, purpose, status, applied_date, due_date " +
+                        "FROM loans WHERE user_email=? ORDER BY id DESC",
+                new String[]{userEmail}
+        );
+
+    }
+
+
+
+    // Feedback / Complaints (shared table, distinguished by type)
+
+    public long insertFeedback(
+            String userEmail,
+            String type,
+            String message,
+            int rating,
+            String date
+    ){
+
+        SQLiteDatabase db = this.getWritableDatabase();
+
+        ContentValues values = new ContentValues();
+
+        values.put("user_email", userEmail);
+        values.put("type", type);
+        values.put("message", message);
+        values.put("rating", rating);
+        values.put("date", date);
+
+        return db.insert(TABLE_FEEDBACK, null, values);
 
     }
 

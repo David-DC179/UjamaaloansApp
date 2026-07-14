@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <item
+        android:id="@+id/nav_dashboard"
+        android:title="Dashboard" />
+
+    <item
+        android:id="@+id/nav_reports"
+        android:title="Reports / My Loans" />
+
+    <item
+        android:id="@+id/nav_account"
+        android:title="My Account" />
+
+    <item
+        android:id="@+id/nav_settings"
+        android:title="Settings" />
+
+    <item
+        android:id="@+id/nav_feedback"
+        android:title="Feedback" />
+
+    <item
+        android:id="@+id/nav_complains"
+        android:title="Complaints" />
+
+    <item
+        android:id="@+id/nav_help"
+        android:title="Help" />
+
+    <item
+        android:id="@+id/nav_contact"
+        android:title="Contact Us" />
+
+    <item
+        android:id="@+id/nav_privacy_policy"
+        android:title="Privacy Policy" />
+
+    <item
+        android:id="@+id/nav_logout"
+        android:title="Logout" />
+
+</menu>

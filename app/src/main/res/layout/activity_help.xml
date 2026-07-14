@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="25dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Help &amp; FAQ"
+            android:textSize="26sp"
+            android:textStyle="bold"/>
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:textSize="16sp"
+            android:text="Q: How do I apply for a loan?\nA: Open the Dashboard and tap Apply Loan, fill in the amount, term and purpose, then submit.\n\nQ: How do I check my loan status?\nA: Open My Loans from the Dashboard or the navigation drawer to see all your applications and their status.\n\nQ: How do I reset my password?\nA: On the Login screen, tap Forgot Password and enter your registered email.\n\nQ: How do I contact support?\nA: Open Contact Us from the navigation drawer to call or message our support line directly." />
+
+    </LinearLayout>
+
+</ScrollView>

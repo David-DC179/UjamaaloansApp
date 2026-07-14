@@ -1,6 +1,8 @@
 <resources>
-    <string name="app_name">UjamaloansApp</string>
+    <string name="app_name">Ujamaa Loans</string>
     <string name="ujamaa_loans">Ujamaa Loans</string>
     <string name="mobile_loan_management_system">Mobile Loan Management System</string>
-    <string name="todo">TODO</string>
+    <string name="app_logo_description">Ujamaa Loans logo</string>
+    <string name="nav_open_desc">Open navigation drawer</string>
+    <string name="nav_close_desc">Close navigation drawer</string>
 </resources>

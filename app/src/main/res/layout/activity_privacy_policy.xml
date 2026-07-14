@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="25dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Privacy Policy"
+            android:textSize="26sp"
+            android:textStyle="bold"/>
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:textSize="16sp"
+            android:text="Ujamaa Loans collects only the information needed to process your loan applications: your name, phone number, email address, and loan details.\n\nYour data is stored securely on your device and, where cloud sync is enabled, in our Firebase database. We do not sell or share your personal information with third parties.\n\nYou may request account deletion at any time by contacting support through the Contact Us screen." />
+
+    </LinearLayout>
+
+</ScrollView>

@@ -1,6 +1,7 @@
 package com.example.ujamaloansapp;
 
 
+import android.content.Intent;
 import android.os.Bundle;
 import android.widget.Button;
 import android.widget.EditText;
@@ -110,6 +111,16 @@ public class Sign_up_Activity extends AppCompatActivity {
                             "Registration Successful",
                             Toast.LENGTH_SHORT
                     ).show();
+
+
+                    Intent intent = new Intent(
+                            Sign_up_Activity.this,
+                            LoginActivity.class
+                    );
+
+                    startActivity(intent);
+
+                    finish();
 
 
                 }
