@@ -1,13 +1,17 @@
 package com.example.ujamaloansapp;
 
 import android.Manifest;
+import android.app.AlertDialog;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.database.Cursor;
 import android.os.Build;
 import android.os.Bundle;
+import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuItem;
-import android.widget.Button;
+import android.view.View;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -19,18 +23,45 @@ import androidx.core.content.ContextCompat;
 import androidx.core.view.GravityCompat;
 import androidx.drawerlayout.widget.DrawerLayout;
 
+import com.google.android.material.card.MaterialCardView;
+import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.google.android.material.navigation.NavigationView;
+
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Locale;
+import java.util.concurrent.TimeUnit;
 
 public class DashboardActivity extends AppCompatActivity {
 
     private static final int NOTIFICATION_PERMISSION_REQUEST_CODE = 101;
+
+    private static final SimpleDateFormat DUE_DATE_FORMAT =
+            new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault());
 
     DrawerLayout drawerLayout;
     NavigationView navView;
     Toolbar toolbar;
     TextView userWelcome;
 
+    MaterialCardView nextDueCard;
+    TextView paymentStatusLabel;
+    TextView nextDueAmount;
+    TextView nextDueDate;
+    TextView nextDueCountdown;
+    TextView activeLoansCount;
+    TextView totalOutstanding;
+
+    LinearLayout recentLoansContainer;
+    TextView recentLoansEmpty;
+    TextView viewAllLoansLink;
+
+    FloatingActionButton applyLoanFab;
+
     SessionManager sessionManager;
+    DatabaseHelper databaseHelper;
+    FirestoreSyncManager firestoreSyncManager;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -40,6 +71,8 @@ public class DashboardActivity extends AppCompatActivity {
         setContentView(R.layout.activity_dashboard);
 
         sessionManager = new SessionManager(this);
+        databaseHelper = new DatabaseHelper(this);
+        firestoreSyncManager = new FirestoreSyncManager(this);
 
         toolbar = findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
@@ -72,21 +105,301 @@ public class DashboardActivity extends AppCompatActivity {
         }
 
 
-        // Wire the quick-action buttons
+        // Wire the floating action button - the entry point for applying for a new loan
 
-        Button applyLoanBtn = findViewById(R.id.applyLoanBtn);
-        Button myLoansBtn = findViewById(R.id.myLoansBtn);
-        Button accountBtn = findViewById(R.id.accountBtn);
-        Button settingsBtn = findViewById(R.id.settingsBtn);
-        Button feedbackBtn = findViewById(R.id.feedbackBtn);
+        applyLoanFab = findViewById(R.id.applyLoanFab);
+        applyLoanFab.setOnClickListener(v -> startActivity(new Intent(this, MainActivity.class)));
 
-        applyLoanBtn.setOnClickListener(v -> startActivity(new Intent(this, MainActivity.class)));
-        myLoansBtn.setOnClickListener(v -> startActivity(new Intent(this, ReportActivity.class)));
-        accountBtn.setOnClickListener(v -> startActivity(new Intent(this, AccountActivity.class)));
-        settingsBtn.setOnClickListener(v -> startActivity(new Intent(this, SettingsActivity.class)));
-        feedbackBtn.setOnClickListener(v -> startActivity(new Intent(this, UserFeedbackActivity.class)));
+
+        // Loan summary widgets
+
+        nextDueCard = findViewById(R.id.nextDueCard);
+        paymentStatusLabel = findViewById(R.id.paymentStatusLabel);
+        nextDueAmount = findViewById(R.id.nextDueAmount);
+        nextDueDate = findViewById(R.id.nextDueDate);
+        nextDueCountdown = findViewById(R.id.nextDueCountdown);
+        activeLoansCount = findViewById(R.id.activeLoansCount);
+        totalOutstanding = findViewById(R.id.totalOutstanding);
+
+        nextDueCard.setOnClickListener(v -> startActivity(new Intent(this, ReportActivity.class)));
+
+
+        // Recent loans widgets
+
+        recentLoansContainer = findViewById(R.id.recentLoansContainer);
+        recentLoansEmpty = findViewById(R.id.recentLoansEmpty);
+        viewAllLoansLink = findViewById(R.id.viewAllLoansLink);
+
+        viewAllLoansLink.setOnClickListener(v -> startActivity(new Intent(this, ReportActivity.class)));
+
+        seedDemoDataIfNeeded();
 
         requestNotificationPermission();
+
+    }
+
+
+
+    // First-time accounts start with no loan history - seed sample data so the dashboard isn't empty
+
+    private void seedDemoDataIfNeeded() {
+
+        String userEmail = sessionManager.getEmail();
+
+        if (databaseHelper.getLoanSummary(userEmail).totalLoans == 0) {
+
+            databaseHelper.seedSampleLoans(userEmail);
+
+        }
+
+    }
+
+
+
+    @Override
+    protected void onResume() {
+
+        super.onResume();
+
+        loadLoanSummary();
+        loadRecentLoans();
+
+        attemptBackgroundSync();
+
+    }
+
+
+
+    // Opportunistically sync with Firestore when a connection is available, so loans applied
+    // while offline go up automatically instead of waiting for a manual Settings sync
+    private void attemptBackgroundSync() {
+
+        if (!NetworkUtils.isConnected(this)) {
+            return;
+        }
+
+        firestoreSyncManager.syncNow(sessionManager.getEmail(), new FirestoreSyncManager.SyncCallback() {
+
+            @Override
+            public void onSyncSuccess(int loansPushed, int feedbackPushed, int loansPulled, int feedbackPulled) {
+
+                sessionManager.setLastSyncTime(System.currentTimeMillis());
+
+                if (loansPulled > 0 || loansPushed > 0) {
+
+                    runOnUiThread(() -> {
+                        loadLoanSummary();
+                        loadRecentLoans();
+                    });
+
+                }
+
+            }
+
+            @Override
+            public void onSyncFailed(String reason) {
+                // Silent - the manual "Sync Now" action in Settings surfaces failures to the user
+            }
+
+        });
+
+    }
+
+
+
+    private void loadLoanSummary() {
+
+        String userEmail = sessionManager.getEmail();
+
+        DatabaseHelper.LoanSummary summary = databaseHelper.getLoanSummary(userEmail);
+
+        activeLoansCount.setText(String.valueOf(summary.pendingLoans));
+        totalOutstanding.setText(String.format(Locale.getDefault(), "Tsh %,.0f", summary.totalOutstanding));
+
+
+        Cursor cursor = databaseHelper.getNextDueLoan(userEmail);
+
+        if (cursor.moveToFirst()) {
+
+            double amount = cursor.getDouble(cursor.getColumnIndexOrThrow("amount"));
+            String status = cursor.getString(cursor.getColumnIndexOrThrow("status"));
+            String dueDate = cursor.getString(cursor.getColumnIndexOrThrow("due_date"));
+
+            paymentStatusLabel.setText("NEXT PAYMENT DUE · " + status.toUpperCase(Locale.getDefault()));
+            nextDueAmount.setText(String.format(Locale.getDefault(), "Tsh %,.0f", amount));
+            nextDueDate.setText("Due " + dueDate);
+
+            applyCountdown(dueDate);
+
+        } else {
+
+            paymentStatusLabel.setText("NEXT PAYMENT DUE");
+            nextDueAmount.setText("No active loans");
+            nextDueDate.setText("Apply for a loan to get started");
+            nextDueCountdown.setText("");
+
+            nextDueCard.setCardBackgroundColor(ContextCompat.getColor(this, R.color.colorTextSecondary));
+
+        }
+
+        cursor.close();
+
+    }
+
+
+
+    private void applyCountdown(String dueDate) {
+
+        try {
+
+            Date due = DUE_DATE_FORMAT.parse(dueDate);
+
+            long diffMillis = due.getTime() - System.currentTimeMillis();
+            long daysLeft = TimeUnit.MILLISECONDS.toDays(diffMillis);
+
+            if (diffMillis < 0) {
+
+                nextDueCountdown.setText("Overdue by " + Math.abs(daysLeft) + " day(s)");
+                nextDueCard.setCardBackgroundColor(ContextCompat.getColor(this, R.color.colorError));
+
+            } else if (daysLeft == 0) {
+
+                nextDueCountdown.setText("Due today");
+                nextDueCard.setCardBackgroundColor(ContextCompat.getColor(this, R.color.colorError));
+
+            } else {
+
+                nextDueCountdown.setText(daysLeft + " day(s) remaining");
+                nextDueCard.setCardBackgroundColor(ContextCompat.getColor(this, R.color.colorPrimary));
+
+            }
+
+        } catch (ParseException e) {
+
+            nextDueCountdown.setText("");
+
+        }
+
+    }
+
+
+
+    private void loadRecentLoans() {
+
+        // Clear out any rows added on a previous call, keep the empty-state label
+
+        for (int i = recentLoansContainer.getChildCount() - 1; i >= 0; i--) {
+
+            View child = recentLoansContainer.getChildAt(i);
+
+            if (child != recentLoansEmpty) {
+                recentLoansContainer.removeView(child);
+            }
+
+        }
+
+        Cursor cursor = databaseHelper.getRecentLoans(sessionManager.getEmail(), 5);
+
+        if (cursor.getCount() == 0) {
+
+            recentLoansEmpty.setVisibility(View.VISIBLE);
+
+        } else {
+
+            recentLoansEmpty.setVisibility(View.GONE);
+
+            LayoutInflater inflater = LayoutInflater.from(this);
+
+            while (cursor.moveToNext()) {
+
+                double amount = cursor.getDouble(cursor.getColumnIndexOrThrow("amount"));
+                int termMonths = cursor.getInt(cursor.getColumnIndexOrThrow("term_months"));
+                String purpose = cursor.getString(cursor.getColumnIndexOrThrow("purpose"));
+                String status = cursor.getString(cursor.getColumnIndexOrThrow("status"));
+                String appliedDate = cursor.getString(cursor.getColumnIndexOrThrow("applied_date"));
+                String dueDate = cursor.getString(cursor.getColumnIndexOrThrow("due_date"));
+
+                if (recentLoansContainer.getChildCount() > 1) {
+
+                    View divider = new View(this);
+
+                    divider.setLayoutParams(new LinearLayout.LayoutParams(
+                            LinearLayout.LayoutParams.MATCH_PARENT, 2));
+
+                    divider.setBackgroundColor(ContextCompat.getColor(this, R.color.colorBackground));
+
+                    recentLoansContainer.addView(divider);
+
+                }
+
+                View row = inflater.inflate(R.layout.item_recent_loan, recentLoansContainer, false);
+
+                ((TextView) row.findViewById(R.id.loanPurpose)).setText(purpose);
+                ((TextView) row.findViewById(R.id.loanDate)).setText("Applied " + appliedDate);
+                ((TextView) row.findViewById(R.id.loanAmount)).setText(
+                        String.format(Locale.getDefault(), "Tsh %,.0f", amount));
+
+                TextView statusView = row.findViewById(R.id.loanStatus);
+                statusView.setText(status.toUpperCase(Locale.getDefault()));
+                statusView.setTextColor(ContextCompat.getColor(this, statusColor(status)));
+
+                row.setOnClickListener(v -> showLoanReceipt(amount, termMonths, purpose, status, appliedDate, dueDate));
+
+                recentLoansContainer.addView(row);
+
+            }
+
+        }
+
+        cursor.close();
+
+    }
+
+
+
+    private int statusColor(String status) {
+
+        switch (status) {
+
+            case "Paid":
+                return R.color.colorPrimary;
+
+            case "Rejected":
+                return R.color.colorError;
+
+            case "Approved":
+                return R.color.colorPrimaryDarkMode;
+
+            default:
+                return R.color.colorSecondary;
+
+        }
+
+    }
+
+
+
+    private void showLoanReceipt(
+            double amount,
+            int termMonths,
+            String purpose,
+            String status,
+            String appliedDate,
+            String dueDate
+    ) {
+
+        String receipt = "Amount: Tsh " + String.format(Locale.getDefault(), "%,.0f", amount) +
+                "\nTerm: " + termMonths + " months" +
+                "\nPurpose: " + purpose +
+                "\nStatus: " + status +
+                "\nApplied Date: " + appliedDate +
+                "\nDue Date: " + dueDate;
+
+        new AlertDialog.Builder(this)
+                .setTitle("Loan Receipt")
+                .setMessage(receipt)
+                .setPositiveButton("Close", null)
+                .show();
 
     }
 
